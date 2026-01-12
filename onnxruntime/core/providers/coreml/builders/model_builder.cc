@@ -382,7 +382,7 @@ uint64_t CopyFP32ToFP16WeightsFile(const ONNX_NAMESPACE::TensorProto& tensor_pro
   auto fp32_data = unpacked_tensor.DataAsSpan<float>();
   std::vector<MILBlob::Fp16> fp16_data(fp32_data.size());
   for (size_t i = 0; i < fp32_data.size(); ++i) {
-    fp16_data[i] = MILBlob::Fp16(fp32_data[i]);
+    fp16_data[i] = MILBlob::Fp16::FromFloat(fp32_data[i]);  // Use FromFloat, not constructor
   }
   MILBlob::Util::Span<const MILBlob::Fp16> data(fp16_data.data(), fp16_data.size());
   return writer.WriteData(data);

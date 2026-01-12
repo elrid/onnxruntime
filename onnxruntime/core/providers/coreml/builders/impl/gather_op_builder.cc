@@ -38,11 +38,11 @@ Status GatherOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const
     const auto axis = GetAxisAttribute(node);
     // coreml docs claims validate_indices is optional but in practice it is required
     const auto validate_indices = false;
-    AddOperationInput(*op, "x", node.InputDefs()[0]->Name());                                   // data
-    AddOperationInput(*op, "indices", node.InputDefs()[1]->Name());                             // indices
+    AddOperationInput(*op, "x", node.InputDefs()[0]->Name(), model_builder);                                   // data
+    AddOperationInput(*op, "indices", node.InputDefs()[1]->Name(), model_builder);                             // indices
     AddOperationInput(*op, "axis", model_builder.AddScalarConstant(op->type(), "axis", axis));  // axis attr
     AddOperationInput(*op, "validate_indices", model_builder.AddScalarConstant(op->type(), "validate_indices", validate_indices));
-    AddOperationOutput(*op, *node.OutputDefs()[0]);  // output
+    AddOperationOutput(*op, *node.OutputDefs()[0], model_builder);  // output
     model_builder.AddOperation(std::move(op));
   } else {
     auto layer = model_builder.CreateNNLayer(node);

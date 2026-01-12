@@ -151,14 +151,14 @@ Status SliceOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const 
     auto begin_mask = model_builder.AddConstant(op->type(), "begin_mask", AsSpan(begin_mask_values));
     auto end_mask = model_builder.AddConstant(op->type(), "end_mask", AsSpan(end_mask_values));
 
-    AddOperationInput(*op, "x", input_defs[0]->Name());
+    AddOperationInput(*op, "x", input_defs[0]->Name(), model_builder);
     AddOperationInput(*op, "begin", begin);
     AddOperationInput(*op, "end", end);
     AddOperationInput(*op, "stride", stride);
     AddOperationInput(*op, "begin_mask", begin_mask);
     AddOperationInput(*op, "end_mask", end_mask);
 
-    AddOperationOutput(*op, *output_defs[0]);
+    AddOperationOutput(*op, *output_defs[0], model_builder);
 
     model_builder.AddOperation(std::move(op));
 

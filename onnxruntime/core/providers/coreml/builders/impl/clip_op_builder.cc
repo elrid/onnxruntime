@@ -72,24 +72,24 @@ Status ClipOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
       // Clip without min/max is an identity node.
       op = model_builder.CreateOperation(node, "identity");
       Operation& identity_op = *op;
-      AddOperationInput(identity_op, "x", input_name);
+      AddOperationInput(identity_op, "x", input_name, model_builder);
     } else {
       if (has_min && has_max && min == 0.f && max == 6.f) {
         // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#coremltools.converters.mil.mil.ops.defs.iOS15.activation.relu6
         op = model_builder.CreateOperation(node, "relu6");
         Operation& relu6_op = *op;
-        AddOperationInput(relu6_op, "x", input_name);
+        AddOperationInput(relu6_op, "x", input_name, model_builder);
       } else if (has_min && min == 0.f && !has_max) {
         // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#coremltools.converters.mil.mil.ops.defs.iOS15.activation.relu
         op = model_builder.CreateOperation(node, "relu");
         Operation& relu_op = *op;
-        AddOperationInput(relu_op, "x", input_name);
+        AddOperationInput(relu_op, "x", input_name, model_builder);
       } else {
         // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#coremltools.converters.mil.mil.ops.defs.iOS15.elementwise_unary.clip
         op = model_builder.CreateOperation(node, "clip");
 
         Operation& clip_op = *op;
-        AddOperationInput(clip_op, "x", input_name);
+        AddOperationInput(clip_op, "x", input_name, model_builder);
 
         // we already checked it and dtype must be existed.
         auto input_dtype = node.InputDefs()[0]->TypeAsProto()->tensor_type().elem_type();
@@ -104,7 +104,7 @@ Status ClipOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
                                                    : node.InputDefs()[1]->Name();
         }
 
-        AddOperationInput(clip_op, "alpha", min_name);
+        AddOperationInput(clip_op, "alpha", min_name, model_builder);
 
         std::string_view max_name;
         if (input_dtype == ONNX_NAMESPACE::TensorProto_DataType_FLOAT) {
@@ -114,11 +114,11 @@ Status ClipOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
           max_name = (min_max_attribs || !has_max) ? model_builder.AddScalarConstant(clip_op.type(), "max", MLFloat16(max))
                                                    : node.InputDefs()[2]->Name();
         }
-        AddOperationInput(clip_op, "beta", max_name);
+        AddOperationInput(clip_op, "beta", max_name, model_builder);
       }
     }
 
-    AddOperationOutput(*op, output);
+    AddOperationOutput(*op, output, model_builder);
     model_builder.AddOperation(std::move(op));
   } else {
     // TODO: CoreML has a Clip layer for NeuralNetwork. Added in CoreML 4. We could potentially use that if available

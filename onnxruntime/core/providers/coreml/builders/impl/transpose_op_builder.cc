@@ -38,9 +38,9 @@ Status TransposeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
     using namespace CoreML::Specification::MILSpec;
 
     std::unique_ptr<Operation> op = model_builder.CreateOperation(node, "transpose");
-    AddOperationInput(*op, "x", node.InputDefs()[0]->Name());
+    AddOperationInput(*op, "x", node.InputDefs()[0]->Name(), model_builder);
     AddOperationInput(*op, "perm", model_builder.AddConstant(op->type(), "perm", perm));
-    AddOperationOutput(*op, *node.OutputDefs()[0]);
+    AddOperationOutput(*op, *node.OutputDefs()[0], model_builder);
     model_builder.AddOperation(std::move(op));
 
   } else {

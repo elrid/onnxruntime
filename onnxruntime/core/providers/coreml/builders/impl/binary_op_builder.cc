@@ -112,8 +112,8 @@ static void AddVariadicInputs(std::unique_ptr<CoreML::Specification::MILSpec::Op
   for (size_t i = 2; i < input_defs.size(); i++) {
     AddIntermediateOperationOutput(*op_prev, layer_input_name_x, elem_type, x0_shape);
     std::unique_ptr<Operation> op_cur = model_builder.CreateOperation(node, op_prev->type());
-    AddOperationInput(*op_cur, "x", layer_input_name_x);
-    AddOperationInput(*op_cur, "y", input_defs[i]->Name());
+    AddOperationInput(*op_cur, "x", layer_input_name_x, model_builder);
+    AddOperationInput(*op_cur, "y", input_defs[i]->Name(), model_builder);
     model_builder.AddOperation(std::move(op_prev));
     op_prev = std::move(op_cur);
     layer_input_name_x = model_builder.GetUniqueName(node, "variadic");
@@ -157,13 +157,13 @@ Status BinaryOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const
     }
 
     std::unique_ptr<Operation> op = model_builder.CreateOperation(node, coreml_op_type);
-    AddOperationInput(*op, "x", input_defs[0]->Name());
-    AddOperationInput(*op, "y", input_defs[1]->Name());
+    AddOperationInput(*op, "x", input_defs[0]->Name(), model_builder);
+    AddOperationInput(*op, "y", input_defs[1]->Name(), model_builder);
     if (input_defs.size() > 2) {
       // "max" node may have variadic inputs
       AddVariadicInputs(&op, model_builder, node, logger);
     }
-    AddOperationOutput(*op, *node.OutputDefs()[0]);
+    AddOperationOutput(*op, *node.OutputDefs()[0], model_builder);
     model_builder.AddOperation(std::move(op));
   } else {
     std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = model_builder.CreateNNLayer(node);

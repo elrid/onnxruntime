@@ -346,11 +346,35 @@ void AddOperationInput(MILSpec::Operation& op, std::string_view input_name, std:
   (*op.mutable_inputs())[input_name] = std::move(arg);
 }
 
+void AddOperationInput(MILSpec::Operation& op, std::string_view input_name, std::string_view value_name,
+                       const ModelBuilder& model_builder) {
+  // When AllowFP16Compute is enabled, graph inputs may have been cast to FP16
+  // Use the converted name if available
+  std::string converted_name = model_builder.GetInputNameForOperations(std::string(value_name));
+  MILSpec::Argument arg;
+  arg.mutable_arguments()->Add()->set_name(converted_name);
+
+  (*op.mutable_inputs())[input_name] = std::move(arg);
+}
+
 void AddOperationVariadicInput(MILSpec::Operation& op, std::string_view input_name,
                                const std::vector<std::string_view>& value_names) {
   MILSpec::Argument arg;
   for (const auto& value : value_names) {
     arg.mutable_arguments()->Add()->set_name(value.data(), value.size());
+  }
+
+  (*op.mutable_inputs())[input_name] = std::move(arg);
+}
+
+void AddOperationVariadicInput(MILSpec::Operation& op, std::string_view input_name,
+                               const std::vector<std::string_view>& value_names,
+                               const ModelBuilder& model_builder) {
+  MILSpec::Argument arg;
+  for (const auto& value : value_names) {
+    // When AllowFP16Compute is enabled, graph inputs may have been cast to FP16
+    std::string converted_name = model_builder.GetInputNameForOperations(std::string(value));
+    arg.mutable_arguments()->Add()->set_name(converted_name);
   }
 
   (*op.mutable_inputs())[input_name] = std::move(arg);
@@ -368,6 +392,20 @@ void AddIntermediateOperationOutput(COREML_SPEC::MILSpec::Operation& op, std::st
   SetTensorTypeInfo(tensor_type, OnnxDataTypeToMILSpec(element_type), shape, /*convert_scalar*/ true);
 }
 
+void AddIntermediateOperationOutput(COREML_SPEC::MILSpec::Operation& op, std::string_view output_name,
+                                    int32_t element_type, std::optional<gsl::span<const int64_t>> shape,
+                                    const ModelBuilder& model_builder) {
+  auto& outputs = *op.mutable_outputs();
+  auto& output_arg = *outputs.Add();
+  output_arg.set_name(output_name.data(), output_name.size());
+
+  MILSpec::ValueType& value = *output_arg.mutable_type();
+  MILSpec::TensorType& tensor_type = *value.mutable_tensortype();
+
+  // Use ModelBuilder's GetMILDataType which handles FP32->FP16 conversion when AllowFP16Compute is enabled
+  SetTensorTypeInfo(tensor_type, model_builder.GetMILDataType(element_type), shape, /*convert_scalar*/ true);
+}
+
 void AddOperationOutput(COREML_SPEC::MILSpec::Operation& op, const NodeArg& output) {
   auto& outputs = *op.mutable_outputs();
   auto& output_arg = *outputs.Add();
@@ -377,6 +415,22 @@ void AddOperationOutput(COREML_SPEC::MILSpec::Operation& op, const NodeArg& outp
   MILSpec::TensorType& tensor_type = *value.mutable_tensortype();
 
   SetTensorTypeInfo(tensor_type, OnnxDataTypeToMILSpec(output.TypeAsProto()->tensor_type().elem_type()), output.Shape(), /*convert_scalar*/ true);
+}
+
+void AddOperationOutput(COREML_SPEC::MILSpec::Operation& op, const NodeArg& output, const ModelBuilder& model_builder) {
+  auto& outputs = *op.mutable_outputs();
+  auto& output_arg = *outputs.Add();
+
+  // When AllowFP16Compute is enabled, model outputs use an intermediate FP16 name
+  // that will be cast back to FP32 later
+  output_arg.set_name(model_builder.GetOutputNameForOperations(output.Name()));
+
+  MILSpec::ValueType& value = *output_arg.mutable_type();
+  MILSpec::TensorType& tensor_type = *value.mutable_tensortype();
+
+  // Use ModelBuilder's GetMILDataType which handles FP32->FP16 conversion when AllowFP16Compute is enabled
+  SetTensorTypeInfo(tensor_type, model_builder.GetMILDataType(output.TypeAsProto()->tensor_type().elem_type()),
+                    output.Shape(), /*convert_scalar*/ true);
 }
 
 void AddPadTypeAndPads(COREML_SPEC::MILSpec::Operation& op, ModelBuilder& model_builder, std::string_view op_type,

@@ -61,6 +61,7 @@ void CoreMLOptions::ValidateAndParseProviderOption(const ProviderOptions& option
       kCoremlProviderOption_ProfileComputePlan,
       kCoremlProviderOption_AllowLowPrecisionAccumulationOnGPU,
       kCoremlProviderOption_ModelCacheDirectory,
+      kCoremlProviderOption_AllowFP16Compute,
   };
   // Validate the options
   for (const auto& option : options) {
@@ -95,6 +96,8 @@ void CoreMLOptions::ValidateAndParseProviderOption(const ProviderOptions& option
       allow_low_precision_accumulation_on_gpu_ = option.second == "1";
     } else if (kCoremlProviderOption_ModelCacheDirectory == option.first) {
       model_cache_directory_ = option.second;
+    } else if (kCoremlProviderOption_AllowFP16Compute == option.first) {
+      allow_fp16_compute_ = option.second == "1";
     }
   }
 }

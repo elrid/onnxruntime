@@ -56,7 +56,7 @@ Status PoolOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
 
     std::unique_ptr<Operation> op = model_builder.CreateOperation(node, coreml_op_type);
 
-    AddOperationInput(*op, "x", input_defs[0]->Name());
+    AddOperationInput(*op, "x", input_defs[0]->Name(), model_builder);
 
     if (is_global) {
       // keep N and C dims, reduce the rest with keepdims=True. equivalent to the ONNX Global*Pool ops.
@@ -87,7 +87,7 @@ Status PoolOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
       }
     }
 
-    AddOperationOutput(*op, *node.OutputDefs()[0]);
+    AddOperationOutput(*op, *node.OutputDefs()[0], model_builder);
     model_builder.AddOperation(std::move(op));
 
   } else {

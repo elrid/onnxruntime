@@ -228,7 +228,7 @@ Status ResizeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const
     }
 
     std::unique_ptr<Operation> op = model_builder.CreateOperation(node, coreml_op_type);
-    AddOperationInput(*op, "x", input_defs[0]->Name());
+    AddOperationInput(*op, "x", input_defs[0]->Name(), model_builder);
 
     std::string coord_trans_mode = helper.Get("coordinate_transformation_mode", "half_pixel");
 
@@ -277,7 +277,7 @@ Status ResizeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const
       }
     }
 
-    AddOperationOutput(*op, *output_defs[0]);
+    AddOperationOutput(*op, *output_defs[0], model_builder);
     model_builder.AddOperation(std::move(op));
   } else {
     std::unique_ptr<COREML_SPEC::NeuralNetworkLayer> layer = model_builder.CreateNNLayer(node);

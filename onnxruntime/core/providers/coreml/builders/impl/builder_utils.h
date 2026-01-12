@@ -133,6 +133,17 @@ void AddOperationInput(COREML_SPEC::MILSpec::Operation& op,
                        std::string_view input_name, std::string_view value_name);
 
 /// <summary>
+/// Add an input argument to a MILSpec::Operation with FP16 input name mapping.
+/// </summary>
+/// <param name="op">Operation to update.</param>
+/// <param name="input_name">The input name defined by the spec for the operation.</param>
+/// <param name="value_name">The name of the value that is providing the input.</param>
+/// <param name="model_builder">ModelBuilder to use for FP16 input name mapping.</param>
+void AddOperationInput(COREML_SPEC::MILSpec::Operation& op,
+                       std::string_view input_name, std::string_view value_name,
+                       const ModelBuilder& model_builder);
+
+/// <summary>
 /// Add a variadic input argument to a MILSpec::Operation
 /// </summary>
 /// <param name="op">Operation to update.</param>
@@ -140,6 +151,13 @@ void AddOperationInput(COREML_SPEC::MILSpec::Operation& op,
 /// <param name="value_names">The input value names.</param>
 void AddOperationVariadicInput(COREML_SPEC::MILSpec::Operation& op, std::string_view input_name,
                                const std::vector<std::string_view>& value_names);
+
+/// <summary>
+/// Add a variadic input argument to a MILSpec::Operation with FP16 name mapping.
+/// </summary>
+void AddOperationVariadicInput(COREML_SPEC::MILSpec::Operation& op, std::string_view input_name,
+                               const std::vector<std::string_view>& value_names,
+                               const ModelBuilder& model_builder);
 
 /// Add an output to a MILSpec::Operation for an intermediate operation when the implementation is composed of
 /// multiple MLProgram operations. In this case we don't have a NodeArg for the output.
@@ -153,11 +171,23 @@ void AddIntermediateOperationOutput(COREML_SPEC::MILSpec::Operation& op, std::st
                                     int32_t element_type, std::optional<gsl::span<const int64_t>> shape);
 
 /// <summary>
+/// Add an output to a MILSpec::Operation for an intermediate operation, with FP16 conversion support.
+/// </summary>
+void AddIntermediateOperationOutput(COREML_SPEC::MILSpec::Operation& op, std::string_view output_name,
+                                    int32_t element_type, std::optional<gsl::span<const int64_t>> shape,
+                                    const ModelBuilder& model_builder);
+
+/// <summary>
 /// Add an output to a MILSpec::Operation. Name, data type and shape are used from the NodeArg.
 /// </summary>
 /// <param name="op">Operation to update.</param>
 /// <param name="output">NodeArg with details of output to add.</param>
 void AddOperationOutput(COREML_SPEC::MILSpec::Operation& op, const NodeArg& output);
+
+/// <summary>
+/// Add an output to a MILSpec::Operation with FP16 conversion support.
+/// </summary>
+void AddOperationOutput(COREML_SPEC::MILSpec::Operation& op, const NodeArg& output, const ModelBuilder& model_builder);
 
 /// <summary>
 /// Add pad_type and pad values.

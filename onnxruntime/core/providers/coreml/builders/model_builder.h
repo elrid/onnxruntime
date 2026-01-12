@@ -59,6 +59,52 @@ class ModelBuilder {
     return create_ml_program_;
   }
 
+  // Returns true if FP16 compute is enabled (for ANE compatibility).
+  // Only applicable to ML Programs.
+  bool AllowFP16Compute() const {
+    return create_ml_program_ && coreml_options_.AllowFP16Compute();
+  }
+
+  // Get the MIL data type for an ONNX type, converting FP32 to FP16 when AllowFP16Compute is enabled.
+  COREML_SPEC::MILSpec::DataType GetMILDataType(int32_t onnx_element_type) const;
+
+  /// <summary>
+  /// Get the input name to use in operations. When AllowFP16Compute is enabled,
+  /// FP32 inputs have Cast operations added, so we return the Cast output name instead.
+  /// </summary>
+  /// <param name="original_name">Original input name from ONNX graph.</param>
+  /// <returns>Name to use in operations (may be Cast output if FP16 conversion applied).</returns>
+  const std::string& GetInputNameForOperations(const std::string& original_name) const;
+
+  /// <summary>
+  /// Get the output name to use in operations. When AllowFP16Compute is enabled,
+  /// FP32 outputs that are model outputs need an intermediate FP16 name.
+  /// </summary>
+  /// <param name="original_name">Original output name from ONNX graph.</param>
+  /// <returns>Name to use in operations (may be intermediate FP16 name).</returns>
+  std::string GetOutputNameForOperations(const std::string& original_name) const;
+
+  /// <summary>
+  /// Add a Cast operation for FP32↔FP16 conversion.
+  /// </summary>
+  /// <param name="input_name">Input tensor name.</param>
+  /// <param name="shape">Tensor shape.</param>
+  /// <param name="to_fp16">If true, cast FP32→FP16. Otherwise cast FP16→FP32.</param>
+  /// <param name="name_suffix">Suffix to append to output name.</param>
+  /// <returns>Name of the Cast output tensor.</returns>
+  std::string AddFP16CastOperation(const std::string& input_name,
+                                   gsl::span<const int64_t> shape,
+                                   bool to_fp16,
+                                   std::string_view name_suffix);
+
+  /// <summary>
+  /// Add an operation input, automatically handling FP16 input name mapping.
+  /// This is a convenience method that wraps AddOperationInput.
+  /// </summary>
+  void AddOperationInputFP16(COREML_SPEC::MILSpec::Operation& op,
+                             std::string_view input_name,
+                             const std::string& value_name) const;
+
   /*
    * NeuralNetworkLayer helpers
    */
@@ -243,6 +289,14 @@ class ModelBuilder {
   // This means an op builder author doesn't need to be aware of the renaming.
   // https://github.com/apple/coremltools/blob/8b37641f243b1a3e81452feea311c6e30dcc9287/coremltools/converters/mil/mil/passes/defs/preprocess.py#L146-L149
   std::unordered_map<std::string, std::string> values_to_rename_;
+
+  // When AllowFP16Compute is enabled, FP32 inputs are converted to FP16 via Cast operations.
+  // This maps original input names to their FP16 Cast output names.
+  // Operations should use GetInputNameForOperations() to get the correct name.
+  std::unordered_map<std::string, std::string> fp16_input_names_;
+
+  // Tracks FP32 graph outputs that need FP16→FP32 Cast operations added.
+  std::unordered_set<std::string> fp16_outputs_;
 };
 
 }  // namespace coreml

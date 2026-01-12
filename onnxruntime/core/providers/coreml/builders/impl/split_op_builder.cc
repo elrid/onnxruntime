@@ -89,9 +89,9 @@ Status SplitOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
       }
     }
 
-    AddOperationInput(*split_op, "x", input_defs[0]->Name());
+    AddOperationInput(*split_op, "x", input_defs[0]->Name(), model_builder);
     for (const auto& output_def : node.OutputDefs()) {
-      AddOperationOutput(*split_op, *output_def);
+      AddOperationOutput(*split_op, *output_def, model_builder);
     }
     model_builder.AddOperation(std::move(split_op));
 

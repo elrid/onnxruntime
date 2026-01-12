@@ -17,6 +17,7 @@ class CoreMLOptions {
   std::string strategy_;
   bool profile_compute_plan_{false};
   bool allow_low_precision_accumulation_on_gpu_{false};
+  bool allow_fp16_compute_{false};
   // path to store the converted coreml model
   // we may run DisableModelCache() to disable model caching
   mutable std::string model_cache_directory_;
@@ -32,6 +33,7 @@ class CoreMLOptions {
   bool EnableOnSubgraph() const { return enable_on_subgraph_; }
   uint32_t ComputeUnits(uint32_t specific_flag = 0xffffffff) const { return compute_units_ & specific_flag; }
   bool AllowLowPrecisionAccumulationOnGPU() const { return allow_low_precision_accumulation_on_gpu_; }
+  bool AllowFP16Compute() const { return allow_fp16_compute_; }
   bool UseStrategy(std::string_view strategy) const { return strategy_ == strategy; }
   bool ProfileComputePlan() const { return profile_compute_plan_ && create_mlprogram_; }
 

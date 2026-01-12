@@ -59,11 +59,11 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
 
     std::unique_ptr<Operation> conv_op = model_builder.CreateOperation(node, "conv");
 
-    AddOperationInput(*conv_op, "x", input_name);
-    AddOperationInput(*conv_op, "weight", input_defs[1]->Name());
+    AddOperationInput(*conv_op, "x", input_name, model_builder);
+    AddOperationInput(*conv_op, "weight", input_defs[1]->Name(), model_builder);
 
     if (input_defs.size() > 2) {
-      AddOperationInput(*conv_op, "bias", input_defs[2]->Name());
+      AddOperationInput(*conv_op, "bias", input_defs[2]->Name(), model_builder);
     }
 
     // we know this input has a valid shape due to the check in IsOpSupportedImpl. ignore N and C dims.
@@ -85,7 +85,7 @@ Status ConvOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const N
 
     AddPadTypeAndPads(*conv_op, model_builder, op_type, helper, num_spatial_dims);
 
-    AddOperationOutput(*conv_op, *node.OutputDefs()[0]);
+    AddOperationOutput(*conv_op, *node.OutputDefs()[0], model_builder);
 
     model_builder.AddOperation(std::move(conv_op));
   } else {

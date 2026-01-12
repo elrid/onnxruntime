@@ -63,8 +63,8 @@ Status GridSampleOpBuilder::AddToModelBuilderImpl([[maybe_unused]] ModelBuilder&
   }
 
   auto op = model_builder.CreateOperation(node, "resample");
-  AddOperationInput(*op, "x", input_defs[0]->Name());
-  AddOperationInput(*op, "coordinates", input_defs[1]->Name());
+  AddOperationInput(*op, "x", input_defs[0]->Name(), model_builder);
+  AddOperationInput(*op, "coordinates", input_defs[1]->Name(), model_builder);
   AddOperationInput(*op, "sampling_mode", model_builder.AddScalarConstant(op->type(), "sampling_mode", mode));
   AddOperationInput(*op, "padding_mode", model_builder.AddScalarConstant(op->type(), "padding_mode", padding_mode));
   if (input_dtype == ONNX_NAMESPACE::TensorProto_DataType_FLOAT) {
@@ -76,7 +76,7 @@ Status GridSampleOpBuilder::AddToModelBuilderImpl([[maybe_unused]] ModelBuilder&
                     model_builder.AddScalarConstant(op->type(), "coordinates_mode", coordinates_mode));
   AddOperationInput(*op, "align_corners", model_builder.AddScalarConstant(op->type(), "align_corners", align_corners));
 
-  AddOperationOutput(*op, *output_defs[0]);
+  AddOperationOutput(*op, *output_defs[0], model_builder);
 
   model_builder.AddOperation(std::move(op));
   return Status::OK();

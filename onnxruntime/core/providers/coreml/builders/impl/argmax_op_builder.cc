@@ -37,11 +37,11 @@ Status ArgMaxOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
     // https://apple.github.io/coremltools/source/coremltools.converters.mil.mil.ops.defs.html#module-coremltools.converters.mil.mil.ops.defs.iOS15.reduction
 
     std::unique_ptr<Operation> op = model_builder.CreateOperation(node, "reduce_argmax");
-    AddOperationInput(*op, "x", node.InputDefs()[0]->Name());
+    AddOperationInput(*op, "x", node.InputDefs()[0]->Name(), model_builder);
     AddOperationInput(*op, "axis", model_builder.AddScalarConstant(op->type(), "axis", axis));
     AddOperationInput(*op, "keep_dims", model_builder.AddScalarConstant(op->type(), "keep_dims", bool(keepdims)));
 
-    AddOperationOutput(*op, *node.OutputDefs()[0]);
+    AddOperationOutput(*op, *node.OutputDefs()[0], model_builder);
     model_builder.AddOperation(std::move(op));
   } else {
     auto* coreml_argmax = layer->mutable_argmax();

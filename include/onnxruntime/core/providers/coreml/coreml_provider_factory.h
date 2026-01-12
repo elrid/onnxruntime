@@ -75,6 +75,12 @@ static const char* const kCoremlProviderOption_AllowLowPrecisionAccumulationOnGP
 // Please find out how to set metadata_props in the onnxruntime API documentation. https://onnxruntime.ai/docs/execution-providers/CoreML-ExecutionProvider.html#configuration-options
 static const char* const kCoremlProviderOption_ModelCacheDirectory = "ModelCacheDirectory";
 
+// Allow FP16 compute precision for MLProgram models.
+// When enabled, FP32 ONNX tensors will be converted to FP16 in the CoreML model,
+// which enables execution on Apple Neural Engine (ANE).
+// Only applicable when ModelFormat is "MLProgram".
+static const char* const kCoremlProviderOption_AllowFP16Compute = "AllowFP16Compute";
+
 // User provided cache-key in metadata_props.
 static const char* const kCOREML_CACHE_KEY = "COREML_CACHE_KEY";
 

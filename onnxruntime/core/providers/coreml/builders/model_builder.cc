@@ -375,14 +375,48 @@ uint64_t CopyOnnxTensorToCoreMLWeightsFile(const onnx::TensorProto& tensor_proto
   return offset;
 }
 
+// Helper to convert FP32 data to FP16 and write to weights file
+uint64_t CopyFP32ToFP16WeightsFile(const ONNX_NAMESPACE::TensorProto& tensor_proto,
+                                   MILBlob::Blob::StorageWriter& writer) {
+  Initializer unpacked_tensor(tensor_proto);
+  auto fp32_data = unpacked_tensor.DataAsSpan<float>();
+  std::vector<MILBlob::Fp16> fp16_data(fp32_data.size());
+  for (size_t i = 0; i < fp32_data.size(); ++i) {
+    fp16_data[i] = MILBlob::Fp16(fp32_data[i]);
+  }
+  MILBlob::Util::Span<const MILBlob::Fp16> data(fp16_data.data(), fp16_data.size());
+  return writer.WriteData(data);
+}
+
+// Helper to convert FP32 immediate value to FP16
+void CopyFP32ToFP16ImmediateValue(const ONNX_NAMESPACE::TensorProto& tensor_proto,
+                                  MILSpec::TensorValue& tensor_value) {
+  Initializer unpacked_tensor(tensor_proto);
+  auto fp32_data = unpacked_tensor.DataAsSpan<float>();
+  auto& fp16_out = *tensor_value.mutable_bytes()->mutable_values();
+  fp16_out.resize(fp32_data.size() * sizeof(uint16_t));
+  uint16_t* out = reinterpret_cast<uint16_t*>(fp16_out.data());
+  for (size_t i = 0; i < fp32_data.size(); ++i) {
+    MLFloat16 fp16_val(fp32_data[i]);
+    out[i] = fp16_val.IsNaN() ? MLFloat16(0.0f).val : fp16_val.val;
+  }
+}
+
 MILSpec::Value OnnxTensorToCoreMLTensor(const ONNX_NAMESPACE::TensorProto& tensor_proto,
-                                        MILBlob::Blob::StorageWriter& weights_file_writer) {
+                                        MILBlob::Blob::StorageWriter& weights_file_writer,
+                                        bool convert_fp32_to_fp16 = false) {
   MILSpec::Value value;
 
   // populate ValueType with tensor data type, dims and rank
   MILSpec::ValueType& value_type = *value.mutable_type();
   MILSpec::TensorType& tensor_type = *value_type.mutable_tensortype();
-  MILSpec::DataType data_type = OnnxDataTypeToMILSpec(tensor_proto.data_type());
+
+  bool should_convert_to_fp16 = convert_fp32_to_fp16 &&
+                                tensor_proto.data_type() == ONNX_NAMESPACE::TensorProto_DataType_FLOAT;
+
+  MILSpec::DataType data_type = should_convert_to_fp16
+      ? MILSpec::DataType::FLOAT16
+      : OnnxDataTypeToMILSpec(tensor_proto.data_type());
   tensor_type.set_datatype(data_type);
 
   tensor_type.set_rank(tensor_proto.dims().size());
@@ -392,7 +426,12 @@ MILSpec::Value OnnxTensorToCoreMLTensor(const ONNX_NAMESPACE::TensorProto& tenso
 
   // add data to either weights.bin or as an immediate value
   if (ShouldWriteInitializerToWeightsFile(tensor_proto)) {
-    uint64_t offset = CopyOnnxTensorToCoreMLWeightsFile(tensor_proto, weights_file_writer);
+    uint64_t offset;
+    if (should_convert_to_fp16) {
+      offset = CopyFP32ToFP16WeightsFile(tensor_proto, weights_file_writer);
+    } else {
+      offset = CopyOnnxTensorToCoreMLWeightsFile(tensor_proto, weights_file_writer);
+    }
 
     auto* file_value = value.mutable_blobfilevalue();
     // Filename copied from
@@ -401,7 +440,11 @@ MILSpec::Value OnnxTensorToCoreMLTensor(const ONNX_NAMESPACE::TensorProto& tenso
     file_value->set_offset(offset);
   } else {
     MILSpec::TensorValue& tensor_value = *value.mutable_immediatevalue()->mutable_tensor();
-    CopyOnnxTensorToCoreMLTensor(tensor_proto, tensor_value);
+    if (should_convert_to_fp16) {
+      CopyFP32ToFP16ImmediateValue(tensor_proto, tensor_value);
+    } else {
+      CopyOnnxTensorToCoreMLTensor(tensor_proto, tensor_value);
+    }
   }
 
   return value;
@@ -557,6 +600,43 @@ ModelBuilder::ModelBuilder(const GraphViewer& graph_viewer, const logging::Logge
 
 ModelBuilder::~ModelBuilder() = default;
 
+// Get the MIL data type, converting FP32 to FP16 when AllowFP16Compute is enabled
+COREML_SPEC::MILSpec::DataType ModelBuilder::GetMILDataType(int32_t onnx_element_type) const {
+  auto mil_type = OnnxDataTypeToMILSpec(onnx_element_type);
+  // When AllowFP16Compute is enabled, convert FP32 operations to FP16 for ANE compatibility
+  if (AllowFP16Compute() && mil_type == COREML_SPEC::MILSpec::DataType::FLOAT32) {
+    return COREML_SPEC::MILSpec::DataType::FLOAT16;
+  }
+  return mil_type;
+}
+
+// Get the input name to use in operations. When AllowFP16Compute is enabled,
+// FP32 inputs have been converted to FP16 via Cast operations.
+const std::string& ModelBuilder::GetInputNameForOperations(const std::string& original_name) const {
+  auto it = fp16_input_names_.find(original_name);
+  if (it != fp16_input_names_.end()) {
+    return it->second;
+  }
+  return original_name;
+}
+
+// Get the output name to use in operations. When AllowFP16Compute is enabled,
+// FP32 model outputs need an intermediate FP16 name that will be cast back to FP32.
+std::string ModelBuilder::GetOutputNameForOperations(const std::string& original_name) const {
+  if (fp16_outputs_.count(original_name) > 0) {
+    return original_name + "_coreml_fp16";
+  }
+  return original_name;
+}
+
+// Convenience method to add operation input with FP16 name mapping
+void ModelBuilder::AddOperationInputFP16(COREML_SPEC::MILSpec::Operation& op,
+                                         std::string_view input_name,
+                                         const std::string& value_name) const {
+  const std::string& actual_name = GetInputNameForOperations(value_name);
+  AddOperationInput(op, input_name, actual_name);
+}
+
 /*
  * NeuralNetwork related helpers
  */
@@ -694,6 +774,46 @@ void ModelBuilder::AddOperation(std::unique_ptr<COREML_SPEC::MILSpec::Operation>
   mlprogram_main_block_->mutable_operations()->AddAllocated(operation.release());
 }
 
+// Helper to add a Cast operation for FP32↔FP16 conversion
+// Returns the name of the Cast output
+std::string ModelBuilder::AddFP16CastOperation(const std::string& input_name,
+                                               gsl::span<const int64_t> shape,
+                                               bool to_fp16,
+                                               std::string_view name_suffix) {
+  std::string output_name = input_name + std::string(name_suffix);
+
+  std::unique_ptr<MILSpec::Operation> op = std::make_unique<MILSpec::Operation>();
+  op->set_type("cast");
+
+  // Set operation name attribute
+  (*op->mutable_attributes())["name"] = CreateScalarTensorValue(GetSafeName(output_name));
+
+  // Add input "x"
+  AddOperationInput(*op, "x", input_name);
+
+  // Add dtype input
+  std::string dtype = to_fp16 ? "fp16" : "fp32";
+  AddOperationInput(*op, "dtype", AddScalarConstant(op->type(), "dtype", dtype));
+
+  // Add output
+  auto& outputs = *op->mutable_outputs();
+  auto& output_arg = *outputs.Add();
+  output_arg.set_name(output_name);
+
+  MILSpec::ValueType& value = *output_arg.mutable_type();
+  MILSpec::TensorType& tensor_type = *value.mutable_tensortype();
+  tensor_type.set_datatype(to_fp16 ? MILSpec::DataType::FLOAT16 : MILSpec::DataType::FLOAT32);
+
+  // Add shape - must also set rank
+  tensor_type.set_rank(static_cast<int64_t>(shape.size()));
+  for (auto dim : shape) {
+    tensor_type.add_dimensions()->mutable_constant()->set_size(dim);
+  }
+
+  AddOperation(std::move(op));
+  return output_name;
+}
+
 const std::string& ModelBuilder::AddTensorValueAsConstantOperation(std::string_view op_type,
                                                                    std::string_view value_type,
                                                                    MILSpec::Value&& input_value) {
@@ -715,6 +835,15 @@ template <>
 std::string_view ModelBuilder::AddConstantImpl(std::string_view op_type, std::string_view value_type,
                                                gsl::span<const float> value,
                                                std::optional<gsl::span<const int64_t>> shape) {
+  if (AllowFP16Compute()) {
+    // Convert FP32 constants to FP16 for ANE compatibility
+    std::vector<MLFloat16> fp16_values(value.size());
+    for (size_t i = 0; i < value.size(); ++i) {
+      fp16_values[i] = MLFloat16(value[i]);
+    }
+    auto input_value = CreateTensorValue<MLFloat16>(gsl::span<const MLFloat16>(fp16_values), shape);
+    return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
+  }
   auto input_value = CreateTensorValue<float>(value, shape);
   return AddTensorValueAsConstantOperation(op_type, value_type, std::move(input_value));
 }
@@ -796,7 +925,7 @@ Status ModelBuilder::RegisterInitializers() {
         has_external_data ? *tensor_proto_inline : *tensor_proto;
 
     if (create_ml_program_) {
-      MILSpec::Value coreml_tensor = OnnxTensorToCoreMLTensor(tensor, *weights_file_writer_);
+      MILSpec::Value coreml_tensor = OnnxTensorToCoreMLTensor(tensor, *weights_file_writer_, AllowFP16Compute());
       ORT_IGNORE_RETURN_VALUE(AddConstantOperation(name, std::move(coreml_tensor)));
     } else {
       std::unique_ptr<NeuralNetworkLayer> layer = std::make_unique<NeuralNetworkLayer>();
@@ -898,6 +1027,9 @@ Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_i
     }
 
     data_type = type_proto->tensor_type().elem_type();
+
+    // Model-level FeatureDescription - keep as original type for ONNX Runtime compatibility
+    // When AllowFP16Compute is enabled, we add cast operations inside the MLProgram
     switch (data_type) {
       case ONNX_NAMESPACE::TensorProto_DataType_FLOAT:
         multi_array->set_datatype(ArrayFeatureType::FLOAT32);
@@ -937,9 +1069,10 @@ Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_i
       // the model inputs need to be wired up as args to the 'main' function.
       auto tensor_value_type = CreateNamedTensorValueType(node_arg, /*convert_scalar*/ true);
 
-      // Handle conversion from int64 to int32
-      tensor_value_type.mutable_type()->mutable_tensortype()->set_datatype(
-          OnnxDataTypeToMILSpec(data_type));
+      // Keep function inputs as original type (FP32) for runtime compatibility.
+      // FP16 conversion is handled internally for weights and operations.
+      auto mil_data_type = OnnxDataTypeToMILSpec(data_type);
+      tensor_value_type.mutable_type()->mutable_tensortype()->set_datatype(mil_data_type);
 
       tensor_value_type.set_name(name);
 
@@ -956,6 +1089,33 @@ Status ModelBuilder::RegisterModelInputOutput(const NodeArg& node_arg, bool is_i
 Status ModelBuilder::RegisterModelInputs() {
   for (const auto* node_arg : graph_viewer_.GetInputs()) {
     ORT_RETURN_IF_ERROR(RegisterModelInputOutput(*node_arg, true /* is_input */));
+
+    // When AllowFP16Compute is enabled, add Cast FP32→FP16 after FP32 inputs
+    // This ensures all operations receive FP16 tensors for ANE compatibility
+    if (AllowFP16Compute() && !IsModelCached()) {
+      const auto& name = node_arg->Name();
+
+      // Skip initializers and skipped inputs
+      if (Contains(GetInitializerTensors(), name) || Contains(skipped_inputs_, name)) {
+        continue;
+      }
+
+      const auto* type_proto = node_arg->TypeAsProto();
+      if (type_proto && type_proto->tensor_type().has_elem_type() &&
+          type_proto->tensor_type().elem_type() == ONNX_NAMESPACE::TensorProto_DataType_FLOAT) {
+        std::vector<int64_t> shape;
+        ORT_RETURN_IF_NOT(GetShape(*node_arg, shape, logger_), "Unable to get shape for input: ", name);
+
+        // Handle scalar case
+        if (shape.empty()) {
+          shape.push_back(1);
+        }
+
+        // Add Cast FP32→FP16 and track the mapping
+        std::string fp16_name = AddFP16CastOperation(name, shape, true, "_to_fp16");
+        fp16_input_names_[name] = fp16_name;
+      }
+    }
   }
 
   return Status::OK();
@@ -979,6 +1139,54 @@ Status ModelBuilder::ProcessNodes() {
 
 Status ModelBuilder::RegisterModelOutputs() {
   for (const auto* node_arg : graph_viewer_.GetOutputs()) {
+    const auto& name = node_arg->Name();
+
+    // When AllowFP16Compute is enabled, add Cast FP16→FP32 before FP32 outputs
+    // This ensures the model produces FP32 outputs as expected by ONNX Runtime
+    if (AllowFP16Compute() && !IsModelCached() && fp16_outputs_.count(name) > 0) {
+      std::vector<int64_t> shape;
+      ORT_RETURN_IF_NOT(GetShape(*node_arg, shape, logger_), "Unable to get shape for output: ", name);
+
+      // Handle scalar case
+      if (shape.empty()) {
+        shape.push_back(1);
+      }
+
+      // Operations produce FP16 tensors with an intermediate name
+      // We need to cast that back to FP32 for the model output
+      std::string fp16_name = name + "_coreml_fp16";
+
+      // Add Cast FP16→FP32 from the intermediate FP16 name to the original output name
+      std::unique_ptr<MILSpec::Operation> op = std::make_unique<MILSpec::Operation>();
+      op->set_type("cast");
+
+      // Set operation name attribute
+      (*op->mutable_attributes())["name"] = CreateScalarTensorValue(GetSafeName(name + "_cast_to_fp32"));
+
+      // Add input "x" - the FP16 intermediate tensor
+      AddOperationInput(*op, "x", fp16_name);
+
+      // Add dtype input
+      AddOperationInput(*op, "dtype", AddScalarConstant(op->type(), "dtype", std::string("fp32")));
+
+      // Add output - the original output name, as FP32
+      auto& outputs = *op->mutable_outputs();
+      auto& output_arg = *outputs.Add();
+      output_arg.set_name(name);
+
+      MILSpec::ValueType& value = *output_arg.mutable_type();
+      MILSpec::TensorType& tensor_type = *value.mutable_tensortype();
+      tensor_type.set_datatype(MILSpec::DataType::FLOAT32);
+
+      // Add shape - must also set rank
+      tensor_type.set_rank(static_cast<int64_t>(shape.size()));
+      for (auto dim : shape) {
+        tensor_type.add_dimensions()->mutable_constant()->set_size(dim);
+      }
+
+      AddOperation(std::move(op));
+    }
+
     ORT_RETURN_IF_ERROR(RegisterModelInputOutput(*node_arg, false /* is_input */));
   }
 
@@ -987,6 +1195,18 @@ Status ModelBuilder::RegisterModelOutputs() {
 
 Status ModelBuilder::CreateModel() {
   PreprocessInitializers();
+
+  // When AllowFP16Compute is enabled, pre-scan outputs to track which ones need FP16 intermediate names
+  // This must happen before ProcessNodes so operations can use the correct output names
+  if (AllowFP16Compute() && !IsModelCached()) {
+    for (const auto* node_arg : graph_viewer_.GetOutputs()) {
+      const auto* type_proto = node_arg->TypeAsProto();
+      if (type_proto && type_proto->tensor_type().has_elem_type() &&
+          type_proto->tensor_type().elem_type() == ONNX_NAMESPACE::TensorProto_DataType_FLOAT) {
+        fp16_outputs_.insert(node_arg->Name());
+      }
+    }
+  }
 
   ORT_RETURN_IF_ERROR(RegisterInitializers());
   ORT_RETURN_IF_ERROR(RegisterModelInputs());

@@ -39,11 +39,11 @@ Status ConvTransposeOpBuilder::AddToModelBuilderImpl([[maybe_unused]] ModelBuild
   std::unique_ptr<Operation> op = model_builder.CreateOperation(node, "conv_transpose");
   const auto& op_type = op->type();
 
-  AddOperationInput(*op, "x", input_name);
-  AddOperationInput(*op, "weight", input_defs[1]->Name());
+  AddOperationInput(*op, "x", input_name, model_builder);
+  AddOperationInput(*op, "weight", input_defs[1]->Name(), model_builder);
 
   if (input_defs.size() > 2) {
-    AddOperationInput(*op, "bias", input_defs[2]->Name());
+    AddOperationInput(*op, "bias", input_defs[2]->Name(), model_builder);
   }
 
   // we know this input has a valid shape due to the check in IsOpSupportedImpl. ignore N and C dims.
@@ -76,7 +76,7 @@ Status ConvTransposeOpBuilder::AddToModelBuilderImpl([[maybe_unused]] ModelBuild
 
   AddPadTypeAndPads(*op, model_builder, op_type, helper, num_spatial_dims);
 
-  AddOperationOutput(*op, *output_defs[0]);
+  AddOperationOutput(*op, *output_defs[0], model_builder);
 
   model_builder.AddOperation(std::move(op));
 

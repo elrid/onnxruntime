@@ -43,7 +43,7 @@ Status ShapeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const 
 
     int32_t output_datatype = ONNX_NAMESPACE::TensorProto_DataType_INT32;
     std::unique_ptr<Operation> op = model_builder.CreateOperation(node, "shape");
-    AddOperationInput(*op, "x", input_defs[0]->Name());
+    AddOperationInput(*op, "x", input_defs[0]->Name(), model_builder);
     if (size != -1 || start != 0) {
       std::string_view layer_input_name_x = model_builder.GetUniqueName(node, "slice_by_size");
       std::vector<int64_t> x0_shape{num_dims};
@@ -51,15 +51,15 @@ Status ShapeOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const 
       model_builder.AddOperation(std::move(op));
 
       auto slice_op = model_builder.CreateOperation(node, "slice_by_size");
-      AddOperationInput(*slice_op, "x", layer_input_name_x);
+      AddOperationInput(*slice_op, "x", layer_input_name_x, model_builder);
       std::vector<int64_t> starts = {start};
       std::vector<int64_t> sizes = {size};
       AddOperationInput(*slice_op, "begin", model_builder.AddConstant(slice_op->type(), "begin", starts));
       AddOperationInput(*slice_op, "size", model_builder.AddConstant(slice_op->type(), "size", sizes));
-      AddOperationOutput(*slice_op, *node.OutputDefs()[0]);
+      AddOperationOutput(*slice_op, *node.OutputDefs()[0], model_builder);
       model_builder.AddOperation(std::move(slice_op));
     } else {
-      AddOperationOutput(*op, *node.OutputDefs()[0]);
+      AddOperationOutput(*op, *node.OutputDefs()[0], model_builder);
       model_builder.AddOperation(std::move(op));
     }
   } else {

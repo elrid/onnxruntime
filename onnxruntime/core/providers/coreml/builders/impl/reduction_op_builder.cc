@@ -92,14 +92,14 @@ Status ReductionOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, co
                              "ReductionOpBuilder::AddToModelBuilderImpl, unexpected op: ", op_type);
     }
     std::unique_ptr<Operation> op = model_builder.CreateOperation(node, coreml_op_type);
-    AddOperationInput(*op, "x", input_defs[0]->Name());
+    AddOperationInput(*op, "x", input_defs[0]->Name(), model_builder);
     if (coreml_op_type != "identity") {
       if (axes.size() > 0) {
         AddOperationInput(*op, "axes", model_builder.AddConstant(op->type(), "axes", axes));
       }
       AddOperationInput(*op, "keep_dims", model_builder.AddScalarConstant(op->type(), "keep_dims", keepdims));
     }
-    AddOperationOutput(*op, *node.OutputDefs()[0]);
+    AddOperationOutput(*op, *node.OutputDefs()[0], model_builder);
 
     model_builder.AddOperation(std::move(op));
   } else {

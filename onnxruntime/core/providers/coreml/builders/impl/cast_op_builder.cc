@@ -64,11 +64,11 @@ Status CastOpBuilder::AddToModelBuilderImpl([[maybe_unused]] ModelBuilder& model
     }
 
     std::unique_ptr<Operation> op = model_builder.CreateOperation(node, op_type);
-    AddOperationInput(*op, "x", node.InputDefs()[0]->Name());
+    AddOperationInput(*op, "x", node.InputDefs()[0]->Name(), model_builder);
     if (op_type == "cast") {
       AddOperationInput(*op, "dtype", model_builder.AddScalarConstant(op->type(), "dtype", std::string(to_dtype)));
     }
-    AddOperationOutput(*op, *node.OutputDefs()[0]);
+    AddOperationOutput(*op, *node.OutputDefs()[0], model_builder);
     model_builder.AddOperation(std::move(op));
   }
 

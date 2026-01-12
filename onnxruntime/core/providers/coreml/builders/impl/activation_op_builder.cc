@@ -129,7 +129,7 @@ Status ActivationOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
     }
 
     std::unique_ptr<Operation> op = model_builder.CreateOperation(node, coreml_op_type);
-    AddOperationInput(*op, "x", node.InputDefs()[0]->Name());
+    AddOperationInput(*op, "x", node.InputDefs()[0]->Name(), model_builder);
 
     if (add_alpha) {
       auto input_dtype = node.InputDefs()[0]->TypeAsProto()->tensor_type().elem_type();
@@ -166,7 +166,7 @@ Status ActivationOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder,
       AddOperationInput(*op, "mode", model_builder.AddScalarConstant(op->type(), "mode", std::string(approximate)));
     }
 
-    AddOperationOutput(*op, *node.OutputDefs()[0]);
+    AddOperationOutput(*op, *node.OutputDefs()[0], model_builder);
 
     model_builder.AddOperation(std::move(op));
 

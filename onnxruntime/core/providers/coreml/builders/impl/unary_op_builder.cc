@@ -45,7 +45,7 @@ Status UnaryOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const 
     }
 
     std::unique_ptr<Operation> op = model_builder.CreateOperation(node, coreml_op_type);
-    AddOperationInput(*op, "x", input_defs[0]->Name());
+    AddOperationInput(*op, "x", input_defs[0]->Name(), model_builder);
     if (op_type == "Reciprocal") {
       float epsilon = 1e-4f;  // epsilon: const T (Optional, default=1e-4)
       auto dtype = node.InputDefs()[0]->TypeAsProto()->tensor_type().elem_type();
@@ -56,7 +56,7 @@ Status UnaryOpBuilder::AddToModelBuilderImpl(ModelBuilder& model_builder, const 
       }
     }
 
-    AddOperationOutput(*op, *node.OutputDefs()[0]);
+    AddOperationOutput(*op, *node.OutputDefs()[0], model_builder);
 
     model_builder.AddOperation(std::move(op));
   } else {
